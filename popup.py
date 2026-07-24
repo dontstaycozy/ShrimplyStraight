@@ -36,7 +36,6 @@ btn = tk.Button(frame, text="I'm sorry, I'll sit up!", command=close_popup,
                 bg='white', fg='black', font=("Helvetica", 9, "bold"), cursor="hand2")
 btn.pack(pady=15)
 
-# Self-destruct the popup after 4 seconds so it doesn't stay forever
-root.after(4000, close_popup)
+# The popup will stay on screen until physically dismissed
 
 root.mainloop()
