@@ -32,7 +32,7 @@ alert_cooldown = 4
 sound_files = glob.glob("*.mp3")
 if not sound_files:
     # Fallback just in case
-    sound_files = ['shrimp_alert.mp3']
+    sound_files = ['shrimp.mp3']
 
 def run_camera():
     global running, is_calibrated, calibration_frames, calibration_ratios, posture_threshold, last_alert_time
