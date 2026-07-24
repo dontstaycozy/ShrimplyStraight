@@ -1,3 +1,4 @@
+import subprocess
 import glob
 import os
 import random
@@ -130,6 +131,9 @@ class PostureMonitor:
         sound_to_play = random.choice(self.sound_files)
         if os.path.exists(sound_to_play):
             playsound(sound_to_play)
+
+            # Trigger the popup
+            subprocess.Popen(["python", "popup.py"])
 
     def run_camera(self):
         cap = cv2.VideoCapture(0)
