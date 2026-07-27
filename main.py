@@ -140,7 +140,8 @@ class PostureMonitor:
                     print(f"Error playing sound: {e}")
 
         if self.popups_enabled:
-            popup_choice = random.choice(['basic', 'picture', 'image1', 'image2'])
+            # basic: 60%, image1: 15%, image2: 15%, picture: 10%
+            popup_choice = random.choices(['basic', 'picture', 'image1', 'image2'], weights=[75, 5, 10, 10], k=1)[0]
             
             if popup_choice == 'picture':
                 font = cv2.FONT_HERSHEY_DUPLEX
