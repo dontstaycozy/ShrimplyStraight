@@ -11,7 +11,7 @@ root = tk.Tk()
 root.attributes('-topmost', True)
 root.overrideredirect(True) 
 
-image_path = "placeholder1.png"
+image_path = "whale.jpg"
 
 if os.path.exists(image_path):
     img = Image.open(image_path)

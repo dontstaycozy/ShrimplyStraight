@@ -11,16 +11,11 @@ root = tk.Tk()
 root.attributes('-topmost', True)
 root.overrideredirect(True) 
 
-image_path = "placeholder2.png"
+image_path = "krill.jpg"
 
 if os.path.exists(image_path):
     img = Image.open(image_path)
     img.thumbnail((400, 400))
-else:
-    # Create a placeholder image if it doesn't exist yet
-    img = Image.new('RGB', (400, 300), color = '#ffb8b8')
-    d = ImageDraw.Draw(img)
-    d.text((160, 140), "Placeholder 2", fill=(0, 0, 0))
 
 width, height = img.size
 
