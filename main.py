@@ -19,7 +19,7 @@ from playsound3 import playsound
 MODEL_ASSET_PATH = 'pose_landmarker.task'
 CALIBRATION_FRAMES_REQUIRED = 30
 POSTURE_TOLERANCE_RATIO = 0.97
-DEFAULT_ALERT_COOLDOWN = 4
+DEFAULT_ALERT_COOLDOWN = 1
 DEFAULT_SOUND_FALLBACK = 'shrimp.mp3'
 
 # MediaPipe Pose Landmark Indices
@@ -32,6 +32,8 @@ RIGHT_SHOULDER = 12
 class PostureMonitor:
     def __init__(self):
         self.running = True
+        self.sound_enabled = True
+        self.popups_enabled = True
         self.is_calibrated = False
         self.calibration_frames = 0
         self.calibration_ratios: List[float] = []
@@ -107,7 +109,7 @@ class PostureMonitor:
         if not self.is_calibrated:
             self._calibrate(posture_ratio)
         else:
-            self._check_posture(posture_ratio)
+            self._check_posture(posture_ratio, frame)
 
     def _calibrate(self, posture_ratio: float):
         if self.calibration_frames < CALIBRATION_FRAMES_REQUIRED:
@@ -118,22 +120,43 @@ class PostureMonitor:
             self.is_calibrated = True
             print(f"Calibration complete. Posture threshold: {self.posture_threshold:.2f}")
 
-    def _check_posture(self, posture_ratio: float):
+    def _check_posture(self, posture_ratio: float, frame):
         current_time = time.time()
         
         if posture_ratio < self.posture_threshold:
             if current_time - self.last_alert_time > self.alert_cooldown:
                 print(f"Shrimp posture detected! Score: {posture_ratio:.2f}")
-                self._play_alert_sound()
+                self._play_alert_sound(frame)
                 self.last_alert_time = current_time
 
-    def _play_alert_sound(self):
-        sound_to_play = random.choice(self.sound_files)
-        if os.path.exists(sound_to_play):
-            playsound(sound_to_play)
+    def _play_alert_sound(self, frame):
+        if self.sound_enabled:
+            sound_to_play = random.choice(self.sound_files)
+            if os.path.exists(sound_to_play):
+                playsound(sound_to_play, block=False)
 
-            # Trigger the popup
-            subprocess.Popen(["python", "popup.py"])
+        if self.popups_enabled:
+            popup_choice = random.choice(['basic', 'picture', 'image1', 'image2'])
+            
+            if popup_choice == 'picture':
+                # Picture popup
+                font = cv2.FONT_HERSHEY_DUPLEX
+                text = "CERTIFIED SHRIMP"
+                text_size = cv2.getTextSize(text, font, 1.5, 3)[0]
+                text_x = (frame.shape[1] - text_size[0]) // 2
+                text_y = frame.shape[0] - 50
+                # Add text shadow/outline
+                cv2.putText(frame, text, (text_x, text_y), font, 1.5, (0, 0, 0), 6, cv2.LINE_AA)
+                cv2.putText(frame, text, (text_x, text_y), font, 1.5, (0, 0, 255), 3, cv2.LINE_AA)
+                cv2.imwrite("shrimp_snap.jpg", frame)
+                subprocess.Popen(["pythonw", "picture_popup.py"])
+            elif popup_choice == 'image1':
+                subprocess.Popen(["pythonw", "image_popup1.py"])
+            elif popup_choice == 'image2':
+                subprocess.Popen(["pythonw", "image_popup2.py"])
+            else:
+                # Trigger the basic popup
+                subprocess.Popen(["pythonw", "popup.py"])
 
     def run_camera(self):
         cap = cv2.VideoCapture(0)
@@ -163,6 +186,12 @@ class TrayIconManager:
     def _create_image(self) -> Image.Image:
         return Image.open("shrimp_icon.png")
 
+    def _toggle_sound(self, icon, item):
+        self.app.sound_enabled = not self.app.sound_enabled
+
+    def _toggle_popups(self, icon, item):
+        self.app.popups_enabled = not self.app.popups_enabled
+
     def _on_quit(self, icon, item):
         print("Shutting down ShrimplyStraight...")
         self.app.stop()
@@ -170,7 +199,11 @@ class TrayIconManager:
             self.icon.stop()
 
     def run(self):
-        menu = pystray.Menu(pystray.MenuItem('Quit', self._on_quit))
+        menu = pystray.Menu(
+            pystray.MenuItem('Sound Enabled', self._toggle_sound, checked=lambda item: self.app.sound_enabled),
+            pystray.MenuItem('Popups Enabled', self._toggle_popups, checked=lambda item: self.app.popups_enabled),
+            pystray.MenuItem('Quit', self._on_quit)
+        )
         self.icon = pystray.Icon("ShrimplyStraight", self._create_image(), "ShrimplyStraight", menu)
         self.icon.run()
 
