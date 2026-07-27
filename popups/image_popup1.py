@@ -1,5 +1,5 @@
 import tkinter as tk
-from PIL import Image, ImageTk, ImageDraw
+from PIL import Image, ImageTk
 import random
 import os
 import sys
@@ -11,13 +11,15 @@ root = tk.Tk()
 root.attributes('-topmost', True)
 root.overrideredirect(True) 
 
-image_path = "whale.jpg"
+image_path = "assets/images/whale.jpg"
 
 if os.path.exists(image_path):
     img = Image.open(image_path)
     img.thumbnail((400, 400))
-
-width, height = img.size
+    width, height = img.size
+else:
+    root.destroy()
+    sys.exit()
 
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
@@ -40,8 +42,8 @@ lbl_img = tk.Label(frame, image=photo, bg='#ff9f9f')
 lbl_img.image = photo
 lbl_img.pack(pady=(10, 0))
 
-lbl_text = tk.Label(frame, text="You're shrimping! (Replace placeholder1.png)",
-               bg='#ff9f9f', fg='#6e0c36', font=("Helvetica", 10, "bold"))
+lbl_text = tk.Label(frame, text="You're shrimping!",
+               bg='#ff9f9f', fg='#6e0c36', font=("Helvetica", 12, "bold"))
 lbl_text.pack(pady=(5, 0))
 
 btn = tk.Button(frame, text="I will fix my posture!", command=close_popup,     

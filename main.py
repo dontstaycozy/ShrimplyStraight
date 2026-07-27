@@ -16,11 +16,11 @@ from mediapipe.tasks.python import vision
 from playsound3 import playsound
 
 # --- Constants ---
-MODEL_ASSET_PATH = 'pose_landmarker.task'
+MODEL_ASSET_PATH = 'assets/models/pose_landmarker.task'
 CALIBRATION_FRAMES_REQUIRED = 30
 POSTURE_TOLERANCE_RATIO = 0.97
 DEFAULT_ALERT_COOLDOWN = 1
-DEFAULT_SOUND_FALLBACK = 'shrimp.mp3'
+DEFAULT_SOUND_FALLBACK = 'assets/audio/shrimp.mp3'
 
 # MediaPipe Pose Landmark Indices
 LEFT_EAR = 7
@@ -40,6 +40,7 @@ class PostureMonitor:
         self.posture_threshold = 0.0
         self.last_alert_time = time.time()
         self.alert_cooldown = DEFAULT_ALERT_COOLDOWN
+        self.active_popups: List[subprocess.Popen] = []
 
         self._setup_landmarker()
         self._load_sounds()
@@ -53,7 +54,7 @@ class PostureMonitor:
         self.landmarker = vision.PoseLandmarker.create_from_options(options)
 
     def _load_sounds(self):
-        self.sound_files = glob.glob("*.mp3")
+        self.sound_files = glob.glob("assets/audio/*.mp3")
         if not self.sound_files:
             self.sound_files = [DEFAULT_SOUND_FALLBACK]
 
@@ -133,30 +134,34 @@ class PostureMonitor:
         if self.sound_enabled:
             sound_to_play = random.choice(self.sound_files)
             if os.path.exists(sound_to_play):
-                playsound(sound_to_play, block=False)
+                try:
+                    playsound(sound_to_play, block=False)
+                except Exception as e:
+                    print(f"Error playing sound: {e}")
 
         if self.popups_enabled:
             popup_choice = random.choice(['basic', 'picture', 'image1', 'image2'])
             
             if popup_choice == 'picture':
-                # Picture popup
                 font = cv2.FONT_HERSHEY_DUPLEX
                 text = "CERTIFIED SHRIMP"
                 text_size = cv2.getTextSize(text, font, 1.5, 3)[0]
                 text_x = (frame.shape[1] - text_size[0]) // 2
                 text_y = frame.shape[0] - 50
-                # Add text shadow/outline
                 cv2.putText(frame, text, (text_x, text_y), font, 1.5, (0, 0, 0), 6, cv2.LINE_AA)
                 cv2.putText(frame, text, (text_x, text_y), font, 1.5, (0, 0, 255), 3, cv2.LINE_AA)
                 cv2.imwrite("shrimp_snap.jpg", frame)
-                subprocess.Popen(["pythonw", "picture_popup.py"])
+                p = subprocess.Popen(["pythonw", "popups/picture_popup.py"])
             elif popup_choice == 'image1':
-                subprocess.Popen(["pythonw", "image_popup1.py"])
+                p = subprocess.Popen(["pythonw", "popups/image_popup1.py"])
             elif popup_choice == 'image2':
-                subprocess.Popen(["pythonw", "image_popup2.py"])
+                p = subprocess.Popen(["pythonw", "popups/image_popup2.py"])
             else:
                 # Trigger the basic popup
-                subprocess.Popen(["pythonw", "popup.py"])
+                p = subprocess.Popen(["pythonw", "popups/popup.py"])
+                
+            self.active_popups.append(p)
+            self.active_popups = [popup for popup in self.active_popups if popup.poll() is None]
 
     def run_camera(self):
         cap = cv2.VideoCapture(0)
@@ -168,7 +173,11 @@ class PostureMonitor:
                 time.sleep(0.1)
                 continue
 
-            self._process_frame(frame)
+            try:
+                self._process_frame(frame)
+            except Exception as e:
+                print(f"Error processing frame: {e}")
+            
             time.sleep(0.01)
 
         cap.release()
@@ -176,6 +185,12 @@ class PostureMonitor:
 
     def stop(self):
         self.running = False
+        for p in self.active_popups:
+            try:
+                if p.poll() is None:
+                    p.terminate()
+            except Exception as e:
+                print(f"Error terminating popup: {e}")
 
 
 class TrayIconManager:
@@ -184,7 +199,7 @@ class TrayIconManager:
         self.icon = None
 
     def _create_image(self) -> Image.Image:
-        return Image.open("shrimp_icon.png")
+        return Image.open("assets/images/shrimp_icon.png")
 
     def _toggle_sound(self, icon, item):
         self.app.sound_enabled = not self.app.sound_enabled
