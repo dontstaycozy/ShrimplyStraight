@@ -184,14 +184,18 @@ class PostureMonitor:
         cap.release()
         self.landmarker.close()
 
-    def stop(self):
-        self.running = False
+    def close_all_popups(self):
         for p in self.active_popups:
             try:
                 if p.poll() is None:
                     p.terminate()
             except Exception as e:
                 print(f"Error terminating popup: {e}")
+        self.active_popups.clear()
+
+    def stop(self):
+        self.running = False
+        self.close_all_popups()
 
 
 class TrayIconManager:
@@ -201,6 +205,9 @@ class TrayIconManager:
 
     def _create_image(self) -> Image.Image:
         return Image.open("assets/images/shrimp_icon.png")
+
+    def _close_all_popups(self, icon, item):
+        self.app.close_all_popups()
 
     def _toggle_sound(self, icon, item):
         self.app.sound_enabled = not self.app.sound_enabled
@@ -216,6 +223,7 @@ class TrayIconManager:
 
     def run(self):
         menu = pystray.Menu(
+            pystray.MenuItem('Close All Popups', self._close_all_popups),
             pystray.MenuItem('Sound Enabled', self._toggle_sound, checked=lambda item: self.app.sound_enabled),
             pystray.MenuItem('Popups Enabled', self._toggle_popups, checked=lambda item: self.app.popups_enabled),
             pystray.MenuItem('Quit', self._on_quit)

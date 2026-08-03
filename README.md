@@ -17,7 +17,7 @@ ShrimplyStraight is a small Python desktop utility that uses your webcam and Med
 - **Dynamic visual popups** when you slouch, including basic alerts, image warnings (whale and krill), and even taking a quick snapshot to expose your shrimp posture! (The snapshot is kept purely in memory and immediately deleted from your disk to save space).
 - **Weighted randomness** for popups so that different alerts appear with varying rarity.
 - **Sound-based posture alerts** with cooldown protection.
-- **Simple system tray controls** to toggle sounds and popups, with a clean Quit action that safely closes all active popups.
+- **Simple system tray controls** to toggle sounds and popups, dismiss/close all open popups at once, and a clean Quit action that safely closes all active popups.
 
 ## Requirements
 
