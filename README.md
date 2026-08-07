@@ -4,33 +4,35 @@
 
 ---
 
-## What is ShrimplyStraight?
+## 🌟 What is ShrimplyStraight?
 
-**ShrimplyStraight** is a lightweight Python background utility designed to keep your spine healthy. Using Google's **MediaPipe Pose Landmarker**, it tracks your neck and shoulder alignment in real-time. Whenever you start slouching or hunching over like a shrimp, it immediately alerts you with sound effects and randomized visual popups.
+**ShrimplyStraight** is a lightweight Windows desktop utility designed to keep your spine aligned. Using Google's **MediaPipe Pose Landmarker**, it tracks your neck and shoulder alignment in real-time. Whenever you start slouching or hunching over like a shrimp, it immediately alerts you with sound effects and randomized visual popups.
 
 ---
 
-## Key Features
+## ✨ Key Features
 
--  **Real-Time AI Pose Tracking**: Uses MediaPipe to track key body landmarks (shoulders and ears) without lagging your system.
-- **Instant Calibration**: Automatically measures your neutral sitting posture during the first 30 frames (takes just 1–2 seconds).
-- **Interactive Popups**:
+- 🎯 **Real-Time AI Pose Tracking**: Uses MediaPipe to track key body landmarks (shoulders and ears) locally with minimal CPU/GPU usage.
+- ⏱️ **Instant Calibration**: Automatically measures your neutral sitting posture during the first 30 detection frames (takes just 1–2 seconds).
+- 🖼️ **Interactive Popups**:
   - **Classic Shrimp Warning** (75% chance) — Quick reminder to straighten your back.
   - **Whale Alert** (10% chance) — Humorous warning graphic.
   - **Krill Alert** (10% chance) — Extra visual reminder.
   - **"CERTIFIED SHRIMP" Photo Cam** (5% chance) — Captures a live snapshot of your slouching posture to keep you accountable!
-- **Custom Sound Alerts**: Plays random `.mp3` audio files with built-in cooldown protection so you aren't overwhelmed.
-- **Full System Tray Control**: Runs completely in the background. Right-click the shrimp icon near your Windows clock to toggle sounds, toggle popups, dismiss all active popups, or quit.
-- **100% Privacy-First**: Everything runs completely locally on your machine. No video or pictures are ever uploaded anywhere. Snapshots taken for posture shaming are loaded into memory and immediately deleted from your disk.
+- 🔊 **Custom Sound Alerts**: Plays random `.mp3` audio files with built-in cooldown protection so you aren't overwhelmed.
+- 🔕 **Full System Tray Control**: Runs completely in the background. Right-click the shrimp icon near your Windows clock to toggle sounds, toggle popups, dismiss all active popups, or quit.
+- 🔒 **100% Privacy-First**: Everything runs completely locally on your machine. No video or pictures are ever uploaded anywhere. Snapshots taken for posture shaming are loaded into memory and immediately deleted from your disk.
+- 📦 **No Python Required for Friends**: Can be bundled into a standalone `.exe` so anyone can use it without installing Python or touching a terminal!
 
 ---
 
-## Step-by-Step User Manual (Easy Guide)
+## 📖 Step-by-Step User Manual (Easy Guide)
 
 Here is everything you need to know to use ShrimplyStraight in your everyday workflow:
 
 ### 1. Starting the Application
-- **Double-click** the **`Shrimply Straight`** shortcut (or run `Start_Shrimply.vbs`).
+- **If using the standalone app**: Double-click **`ShrimplyStraight.exe`**.
+- **If using the script version**: Double-click the **`Shrimply Straight`** Desktop shortcut (or run `Start_Shrimply.vbs`).
 - The program runs silently in the background — you won't see a giant application window pop up.
 
 ### 2. Calibrating Your Posture
@@ -43,7 +45,7 @@ Here is everything you need to know to use ShrimplyStraight in your everyday wor
 
 ### 4. When You Slouch ("Shrimping")
 - If your neck drops or you hunch forward for too long, an **alert sound** will play and a **popup** will appear on your screen.
-- Click the button on the popup (e.g., *"I'll sit up!"*) to dismiss it, and straighten your back!
+- Click the button on the popup (e.g., *"I'm sorry, I'll sit up!"*) to dismiss it, and straighten your back!
 
 ### 5. Managing the App via System Tray
 Look at the **bottom-right corner of your screen** (the Windows Notification Area / System Tray near the clock). You may need to click the small `^` arrow to see hidden icons:
@@ -56,51 +58,64 @@ Look at the **bottom-right corner of your screen** (the Windows Notification Are
 - **`Popups Enabled`**: Click to check/uncheck and enable or disable visual popups.
 - **`Quit`**: Completely shuts down the application and camera tracking.
 
-### 6. How to Turn It Off
+### 6. How to Turn It Off (Exit)
 - **Right-click the Shrimp icon** in the system tray.
 - Click **`Quit`**.
 - That's it! All background tracking stops and any remaining popups close automatically.
 
 ---
 
-## Installation & Setup
+## 🎁 Sharing with Friends (No Python Needed!)
 
-### Prerequisites
-1. **Python 3.9 – 3.12** installed on your system.
-2. A functional **Webcam** connected to your PC.
+If you want to send this app to a friend who **does not have Python installed** and doesn't know how to use terminals:
 
-### 1. Clone or Download the Repository
-```bash
-git clone https://github.com/dontstaycozy/ShrimplyStraight.git
-cd ShrimplyStraight
-```
-
-### 2. Install Required Packages
-Open a terminal (Command Prompt or PowerShell) in the project directory and run:
-
-```bash
-pip install opencv-python mediapipe playsound3 pystray pillow numpy
-```
-
-### 3. Launching
-You can run it directly with Python:
-```bash
-python main.py
-```
-Or start it in the background without a terminal window:
-- Double-click **`Start_Shrimply.vbs`** or the **`Shrimply Straight.lnk`** shortcut.
+1. **Build the standalone app**:
+   - Double-click **`build_exe.bat`** in this folder.
+   - It will automatically compile the app into `dist\ShrimplyStraight\`.
+2. **Share it**:
+   - Right-click the `dist\ShrimplyStraight` folder $\rightarrow$ **Compress to ZIP file**.
+   - Send the `.zip` file to your friend.
+3. **How your friend runs it**:
+   - They extract the `.zip` file.
+   - They double-click **`ShrimplyStraight.exe`**—that's all!
 
 ---
 
-## Project Structure
+## 🛠️ Installation & Setup (Developer / Source Version)
+
+If you have Python installed and want to run or modify the source code:
+
+### Option A: One-Click Setup (Recommended)
+1. Double-click **`Setup.bat`**.
+2. It automatically creates an isolated virtual environment (`venv`), installs all dependencies from `requirements.txt`, and places a **Shrimply Straight** shortcut on your Desktop!
+
+### Option B: Manual Setup
+Open a terminal in the project directory and run:
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Run the application
+python main.py
+```
+
+---
+
+## 📁 Project Structure
 
 ```text
 ShrimplyStraight/
 ├── Shrimply Straight.lnk     # Windows Desktop shortcut
-├── Start_Shrimply.vbs        # VBS launcher (runs pythonw silently in background)
+├── Start_Shrimply.vbs        # Silent VBS launcher
+├── Setup.bat                 # 1-click automatic setup script for Python users
+├── build_exe.bat             # 1-click script to build standalone ShrimplyStraight.exe
+├── requirements.txt          # Python package dependencies
 ├── main.py                   # Main detection loop, calibration, and tray icon logic
 ├── README.md                 # Project documentation & user guide
-├── popups/                   # Standalone Tkinter popup scripts
+├── popups/                   # Standalone Tkinter popup modules
+│   ├── __init__.py
+│   ├── popup_manager.py      # Core popup dispatcher & UI logic
 │   ├── popup.py              # Default text warning popup
 │   ├── picture_popup.py      # "Certified Shrimp" camera snapshot popup
 │   ├── image_popup1.py       # Whale alert popup
@@ -119,14 +134,14 @@ ShrimplyStraight/
 
 ---
 
-## Customization
+## 🎨 Customization
 
 ### Add Your Own Sounds
-- Drop any `.mp3` file into the `assets/audio/` folder.
+- Drop any `.mp3` file into the `assets/audio/` folder (works for both Python runs and the standalone `.exe` folder).
 - ShrimplyStraight will automatically pick randomly from all MP3s in that folder whenever you slouch!
 
 ### Add or Change Images
-- Replace or add images in `assets/images/` to customize the visuals shown in `popups/`.
+- Replace or add images in `assets/images/` to customize the visuals shown in popups.
 
 ---
 
@@ -145,7 +160,7 @@ ShrimplyStraight/
 
 ---
 
-## Troubleshooting & FAQ
+## ❓ Troubleshooting & FAQ
 
 **Q: I launched the program, but nothing appeared on screen?**  
 **A:** This is normal! The app runs silently in your Windows System Tray (bottom-right near your clock). Look for the shrimp icon.
@@ -158,6 +173,6 @@ ShrimplyStraight/
 
 ---
 
-## License
+## 📄 License
 
 This project is open-source and provided for personal, educational, and postural well-being use.

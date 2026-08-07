@@ -1,10 +1,14 @@
-import subprocess
+import ctypes
 import glob
+import multiprocessing
 import os
 import random
+import subprocess
+import sys
+import tempfile
 import threading
 import time
-from typing import List, Tuple, Optional
+from typing import Callable, List, Optional, Tuple
 
 import cv2
 import mediapipe as mp
@@ -15,12 +19,37 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from playsound3 import playsound
 
-# --- Constants ---
-MODEL_ASSET_PATH = 'assets/models/pose_landmarker.task'
-CALIBRATION_FRAMES_REQUIRED = 30
-POSTURE_TOLERANCE_RATIO = 0.97
-DEFAULT_ALERT_COOLDOWN = 1
-DEFAULT_SOUND_FALLBACK = 'assets/audio/shrimp.mp3'
+
+def get_resource_path(relative_path: str) -> str:
+    """Get absolute path to resource, works for dev and for PyInstaller bundle."""
+    # PyInstaller creates a temp folder and stores path in _MEIPASS
+    if hasattr(sys, '_MEIPASS'):
+        bundle_path = os.path.join(sys._MEIPASS, relative_path)
+        if os.path.exists(bundle_path):
+            return bundle_path
+
+    # Check relative to executable location (when running as standalone EXE)
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(sys.executable)
+        local_path = os.path.join(exe_dir, relative_path)
+        if os.path.exists(local_path):
+            return local_path
+
+    # Check relative to this script file (dev mode)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    local_path = os.path.join(script_dir, relative_path)
+    if os.path.exists(local_path):
+        return local_path
+
+    return os.path.abspath(relative_path)
+
+
+# --- Posture & Alert Constants ---
+CALIBRATION_FRAMES_REQUIRED = 45   # ~1.5 seconds of camera frames to establish baseline
+POSTURE_TOLERANCE_RATIO = 0.85      # Posture must drop below 85% of baseline to count as slouching
+DEFAULT_ALERT_COOLDOWN = 30        # 30-second cooldown between alerts
+SLOUCH_CONFIRM_SECONDS = 1.5       # Must continuously slouch for 1.5s to trigger (avoids twitch false alarms)
+MAX_ACTIVE_POPUPS = 1              # Maximum simultaneous popup windows allowed on screen
 
 # MediaPipe Pose Landmark Indices
 LEFT_EAR = 7
@@ -38,15 +67,21 @@ class PostureMonitor:
         self.calibration_frames = 0
         self.calibration_ratios: List[float] = []
         self.posture_threshold = 0.0
-        self.last_alert_time = time.time()
+        self.last_alert_time = 0.0
         self.alert_cooldown = DEFAULT_ALERT_COOLDOWN
+        self.slouch_start_time: Optional[float] = None
         self.active_popups: List[subprocess.Popen] = []
+
+        # Callbacks for UI/Tray notifications
+        self.on_calibration_complete: Optional[Callable[[float], None]] = None
+        self.on_recalibration_start: Optional[Callable[[], None]] = None
 
         self._setup_landmarker()
         self._load_sounds()
 
     def _setup_landmarker(self):
-        base_options = python.BaseOptions(model_asset_path=MODEL_ASSET_PATH)
+        model_path = get_resource_path('assets/models/pose_landmarker.task')
+        base_options = python.BaseOptions(model_asset_path=model_path)
         options = vision.PoseLandmarkerOptions(
             base_options=base_options,
             output_segmentation_masks=False
@@ -54,9 +89,33 @@ class PostureMonitor:
         self.landmarker = vision.PoseLandmarker.create_from_options(options)
 
     def _load_sounds(self):
-        self.sound_files = glob.glob("assets/audio/*.mp3")
+        sound_patterns = [
+            get_resource_path("assets/audio/*.mp3"),
+            os.path.join(os.path.dirname(sys.executable), "assets", "audio", "*.mp3"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "audio", "*.mp3"),
+            "assets/audio/*.mp3"
+        ]
+
+        found_sounds = set()
+        for pattern in sound_patterns:
+            for s in glob.glob(pattern):
+                if os.path.exists(s):
+                    found_sounds.add(os.path.abspath(s))
+
+        self.sound_files = list(found_sounds)
         if not self.sound_files:
-            self.sound_files = [DEFAULT_SOUND_FALLBACK]
+            fallback = get_resource_path('assets/audio/shrimp.mp3')
+            if os.path.exists(fallback):
+                self.sound_files = [fallback]
+
+    def request_recalibration(self):
+        """Reset calibration state to measure new baseline posture."""
+        self.is_calibrated = False
+        self.calibration_frames = 0
+        self.calibration_ratios.clear()
+        self.slouch_start_time = None
+        if self.on_recalibration_start:
+            self.on_recalibration_start()
 
     def _calculate_posture_ratio(self, landmarks, frame_shape) -> Optional[float]:
         # Extract pixel coordinates for relevant landmarks
@@ -99,12 +158,15 @@ class PostureMonitor:
         results = self.landmarker.detect(mp_image)
 
         if not results.pose_landmarks or len(results.pose_landmarks) == 0:
+            # When user is not visible, reset slouch timer
+            self.slouch_start_time = None
             return
 
         landmarks = results.pose_landmarks[0]
         posture_ratio = self._calculate_posture_ratio(landmarks, frame.shape)
         
         if posture_ratio is None:
+            self.slouch_start_time = None
             return
 
         if not self.is_calibrated:
@@ -120,18 +182,28 @@ class PostureMonitor:
             self.posture_threshold = np.mean(self.calibration_ratios) * POSTURE_TOLERANCE_RATIO
             self.is_calibrated = True
             print(f"Calibration complete. Posture threshold: {self.posture_threshold:.2f}")
+            if self.on_calibration_complete:
+                self.on_calibration_complete(self.posture_threshold)
 
     def _check_posture(self, posture_ratio: float, frame):
         current_time = time.time()
         
         if posture_ratio < self.posture_threshold:
-            if current_time - self.last_alert_time > self.alert_cooldown:
-                print(f"Shrimp posture detected! Score: {posture_ratio:.2f}")
-                self._play_alert_sound(frame)
-                self.last_alert_time = current_time
+            if self.slouch_start_time is None:
+                self.slouch_start_time = current_time
+            elif (current_time - self.slouch_start_time) >= SLOUCH_CONFIRM_SECONDS:
+                # Sustained slouch confirmed
+                if (current_time - self.last_alert_time) > self.alert_cooldown:
+                    print(f"Shrimp posture detected! Score: {posture_ratio:.2f} (Threshold: {self.posture_threshold:.2f})")
+                    self._trigger_alert(frame)
+                    self.last_alert_time = current_time
+        else:
+            # Posture is good, reset slouch duration tracker
+            self.slouch_start_time = None
 
-    def _play_alert_sound(self, frame):
-        if self.sound_enabled:
+    def _trigger_alert(self, frame):
+        # 1. Play sound alert
+        if self.sound_enabled and self.sound_files:
             sound_to_play = random.choice(self.sound_files)
             if os.path.exists(sound_to_play):
                 try:
@@ -139,10 +211,17 @@ class PostureMonitor:
                 except Exception as e:
                     print(f"Error playing sound: {e}")
 
+        # 2. Launch popup alert (with cap on concurrent popups)
         if self.popups_enabled:
-            # basic: 60%, image1: 15%, image2: 15%, picture: 10%
-            popup_choice = random.choices(['basic', 'picture', 'image1', 'image2'], weights=[75, 5, 10, 10], k=1)[0]
+            # Clean up finished popups
+            self.active_popups = [p for p in self.active_popups if p.poll() is None]
+            if len(self.active_popups) >= MAX_ACTIVE_POPUPS:
+                return  # Do not spawn more popups if one is already awaiting user dismissal
+
+            # basic: 70%, picture: 10%, image1: 10%, image2: 10%
+            popup_choice = random.choices(['basic', 'picture', 'image1', 'image2'], weights=[70, 10, 10, 10], k=1)[0]
             
+            snap_path = None
             if popup_choice == 'picture':
                 font = cv2.FONT_HERSHEY_DUPLEX
                 text = "CERTIFIED SHRIMP"
@@ -151,18 +230,27 @@ class PostureMonitor:
                 text_y = frame.shape[0] - 50
                 cv2.putText(frame, text, (text_x, text_y), font, 1.5, (0, 0, 0), 6, cv2.LINE_AA)
                 cv2.putText(frame, text, (text_x, text_y), font, 1.5, (0, 0, 255), 3, cv2.LINE_AA)
-                cv2.imwrite("shrimp_snap.jpg", frame)
-                p = subprocess.Popen(["pythonw", "popups/picture_popup.py"])
-            elif popup_choice == 'image1':
-                p = subprocess.Popen(["pythonw", "popups/image_popup1.py"])
-            elif popup_choice == 'image2':
-                p = subprocess.Popen(["pythonw", "popups/image_popup2.py"])
-            else:
-                # Trigger the basic popup
-                p = subprocess.Popen(["pythonw", "popups/popup.py"])
-                
-            self.active_popups.append(p)
-            self.active_popups = [popup for popup in self.active_popups if popup.poll() is None]
+                snap_path = os.path.join(tempfile.gettempdir(), f"shrimp_snap_{int(time.time() * 1000)}.jpg")
+                cv2.imwrite(snap_path, frame)
+
+            try:
+                if getattr(sys, 'frozen', False):
+                    # Running as compiled standalone EXE
+                    cmd = [sys.executable, "--popup", popup_choice]
+                    if snap_path:
+                        cmd.append(snap_path)
+                else:
+                    # Running as Python script
+                    pythonw_candidate = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+                    python_bin = pythonw_candidate if os.path.exists(pythonw_candidate) else sys.executable
+                    cmd = [python_bin, os.path.abspath(__file__), "--popup", popup_choice]
+                    if snap_path:
+                        cmd.append(snap_path)
+
+                p = subprocess.Popen(cmd)
+                self.active_popups.append(p)
+            except Exception as e:
+                print(f"Error launching popup: {e}")
 
     def run_camera(self):
         cap = cv2.VideoCapture(0)
@@ -203,8 +291,33 @@ class TrayIconManager:
         self.app = app
         self.icon = None
 
+        # Wire up callbacks from monitor to tray notifications
+        self.app.on_calibration_complete = self._on_calibration_done
+        self.app.on_recalibration_start = self._on_recalibration_begin
+
     def _create_image(self) -> Image.Image:
-        return Image.open("assets/images/shrimp_icon.png")
+        icon_path = get_resource_path("assets/images/shrimp_icon.png")
+        if os.path.exists(icon_path):
+            return Image.open(icon_path)
+        # Fallback 32x32 blank image if icon missing
+        return Image.new('RGB', (32, 32), color=(255, 120, 120))
+
+    def notify(self, message: str, title: str = "ShrimplyStraight"):
+        """Show a native Windows system tray notification."""
+        try:
+            if self.icon and hasattr(self.icon, 'notify'):
+                self.icon.notify(message, title)
+        except Exception as e:
+            print(f"Notification error: {e}")
+
+    def _on_calibration_done(self, threshold: float):
+        self.notify("✅ Baseline calibrated! Posture monitoring is live.\nStay straight!", "ShrimplyStraight")
+
+    def _on_recalibration_begin(self):
+        self.notify("🔄 Recalibrating posture...\nPlease sit up straight for 2 seconds!", "ShrimplyStraight")
+
+    def _recalibrate(self, icon, item):
+        self.app.request_recalibration()
 
     def _close_all_popups(self, icon, item):
         self.app.close_all_popups()
@@ -223,16 +336,46 @@ class TrayIconManager:
 
     def run(self):
         menu = pystray.Menu(
-            pystray.MenuItem('Close All Popups', self._close_all_popups),
-            pystray.MenuItem('Sound Enabled', self._toggle_sound, checked=lambda item: self.app.sound_enabled),
-            pystray.MenuItem('Popups Enabled', self._toggle_popups, checked=lambda item: self.app.popups_enabled),
-            pystray.MenuItem('Quit', self._on_quit)
+            pystray.MenuItem('🔄 Recalibrate Posture', self._recalibrate),
+            pystray.MenuItem('🖼️ Close All Popups', self._close_all_popups),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem('🔊 Sound Alerts Enabled', self._toggle_sound, checked=lambda item: self.app.sound_enabled),
+            pystray.MenuItem('🪟 Visual Popups Enabled', self._toggle_popups, checked=lambda item: self.app.popups_enabled),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem('❌ Quit ShrimplyStraight', self._on_quit)
         )
         self.icon = pystray.Icon("ShrimplyStraight", self._create_image(), "ShrimplyStraight", menu)
-        self.icon.run()
+        
+        # Show startup notification once tray icon loop starts
+        def on_icon_ready(icon):
+            icon.visible = True
+            time.sleep(0.5)
+            self.notify("🦐 ShrimplyStraight is active in your tray!\nSit up straight now to calibrate.", "ShrimplyStraight")
+
+        self.icon.run(setup=on_icon_ready)
+
+
+_single_instance_mutex = None
+
+
+def acquire_single_instance_lock() -> bool:
+    """Ensure only one main instance of ShrimplyStraight runs simultaneously."""
+    global _single_instance_mutex
+    mutex_name = "Global\\ShrimplyStraight_SingleInstance_Mutex_2026"
+    kernel32 = ctypes.windll.kernel32
+    _single_instance_mutex = kernel32.CreateMutexW(None, False, mutex_name)
+    last_error = kernel32.GetLastError()
+    ERROR_ALREADY_EXISTS = 183
+    if last_error == ERROR_ALREADY_EXISTS:
+        return False
+    return True
 
 
 def main():
+    if not acquire_single_instance_lock():
+        print("ShrimplyStraight is already running in your system tray!")
+        sys.exit(0)
+
     print("Starting ShrimplyStraight... look at the camera to calibrate!")
     
     app = PostureMonitor()
@@ -242,7 +385,7 @@ def main():
     camera_thread = threading.Thread(target=app.run_camera, daemon=True)
     camera_thread.start()
     
-    # This blocks until the icon is stopped
+    # This blocks until the icon is stopped (Quit is clicked)
     tray_manager.run()
     
     # Ensure camera thread cleans up
@@ -250,4 +393,14 @@ def main():
 
 
 if __name__ == '__main__':
+    multiprocessing.freeze_support()
+
+    # Handle popup subprocess dispatch
+    if len(sys.argv) > 1 and sys.argv[1] == "--popup":
+        from popups.popup_manager import dispatch_popup
+        p_type = sys.argv[2] if len(sys.argv) > 2 else 'basic'
+        p_args = sys.argv[3:] if len(sys.argv) > 3 else []
+        dispatch_popup(p_type, *p_args)
+        sys.exit(0)
+
     main()

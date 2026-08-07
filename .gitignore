@@ -1,0 +1,17 @@
+# Virtual Environments
+venv/
+env/
+ENV/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller Build Artifacts
+build/
+dist/
+*.spec
+
+# Temp snapshots
+shrimp_snap*.jpg
