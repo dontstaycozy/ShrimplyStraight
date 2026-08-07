@@ -48,8 +48,7 @@ def get_resource_path(relative_path: str) -> str:
 CALIBRATION_FRAMES_REQUIRED = 35   # ~1.2 seconds of camera frames to establish baseline
 POSTURE_TOLERANCE_RATIO = 0.90      # Posture below 90% of baseline counts as slouching
 SLOUCH_CONFIRM_SECONDS = 0.4       # Triggers fast (0.4s) every time user slouches
-CONTINUOUS_SLOUCH_REMINDER_COOLDOWN = 15  # If user stays slouched without sitting up, repeat alert every 15s
-MAX_ACTIVE_POPUPS = 1              # Maximum simultaneous popup windows allowed on screen
+CONTINUOUS_SLOUCH_REMINDER_COOLDOWN = 5   # While continuously slouching, spams more popups every 5s!
 
 # MediaPipe Pose Landmark Indices
 LEFT_EAR = 7
@@ -225,15 +224,13 @@ class PostureMonitor:
                 except Exception as e:
                     print(f"Error playing sound: {e}")
 
-        # 2. Launch popup alert (with cap on concurrent popups)
+        # 2. Launch popup alert (spams popups every time triggered!)
         if self.popups_enabled:
-            # Clean up finished popups
+            # Clean up dead popups from tracking list
             self.active_popups = [p for p in self.active_popups if p.poll() is None]
-            if len(self.active_popups) >= MAX_ACTIVE_POPUPS:
-                return  # Do not spawn more popups if one is already awaiting user dismissal
 
-            # basic: 70%, picture: 10%, image1: 10%, image2: 10%
-            popup_choice = random.choices(['basic', 'picture', 'image1', 'image2'], weights=[70, 10, 10, 10], k=1)[0]
+            # Choose varied popup types: basic (40%), picture snap (20%), whale (20%), krill (20%)
+            popup_choice = random.choices(['basic', 'picture', 'image1', 'image2'], weights=[40, 20, 20, 20], k=1)[0]
             
             snap_path = None
             if popup_choice == 'picture':
