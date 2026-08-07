@@ -45,10 +45,10 @@ def get_resource_path(relative_path: str) -> str:
 
 
 # --- Posture & Alert Constants ---
-CALIBRATION_FRAMES_REQUIRED = 45   # ~1.5 seconds of camera frames to establish baseline
-POSTURE_TOLERANCE_RATIO = 0.85      # Posture must drop below 85% of baseline to count as slouching
-DEFAULT_ALERT_COOLDOWN = 30        # 30-second cooldown between alerts
-SLOUCH_CONFIRM_SECONDS = 1.5       # Must continuously slouch for 1.5s to trigger (avoids twitch false alarms)
+CALIBRATION_FRAMES_REQUIRED = 35   # ~1.2 seconds of camera frames to establish baseline
+POSTURE_TOLERANCE_RATIO = 0.90      # Posture below 90% of baseline counts as slouching
+SLOUCH_CONFIRM_SECONDS = 0.4       # Triggers fast (0.4s) every time user slouches
+CONTINUOUS_SLOUCH_REMINDER_COOLDOWN = 15  # If user stays slouched without sitting up, repeat alert every 15s
 MAX_ACTIVE_POPUPS = 1              # Maximum simultaneous popup windows allowed on screen
 
 # MediaPipe Pose Landmark Indices
@@ -68,7 +68,7 @@ class PostureMonitor:
         self.calibration_ratios: List[float] = []
         self.posture_threshold = 0.0
         self.last_alert_time = 0.0
-        self.alert_cooldown = DEFAULT_ALERT_COOLDOWN
+        self.is_slouching = False
         self.slouch_start_time: Optional[float] = None
         self.active_popups: List[subprocess.Popen] = []
 
@@ -113,6 +113,7 @@ class PostureMonitor:
         self.is_calibrated = False
         self.calibration_frames = 0
         self.calibration_ratios.clear()
+        self.is_slouching = False
         self.slouch_start_time = None
         if self.on_recalibration_start:
             self.on_recalibration_start()
@@ -158,7 +159,8 @@ class PostureMonitor:
         results = self.landmarker.detect(mp_image)
 
         if not results.pose_landmarks or len(results.pose_landmarks) == 0:
-            # When user is not visible, reset slouch timer
+            # When user is not visible, reset slouch tracker
+            self.is_slouching = False
             self.slouch_start_time = None
             return
 
@@ -166,6 +168,7 @@ class PostureMonitor:
         posture_ratio = self._calculate_posture_ratio(landmarks, frame.shape)
         
         if posture_ratio is None:
+            self.is_slouching = False
             self.slouch_start_time = None
             return
 
@@ -189,16 +192,27 @@ class PostureMonitor:
         current_time = time.time()
         
         if posture_ratio < self.posture_threshold:
+            # User is currently in slouching posture
             if self.slouch_start_time is None:
                 self.slouch_start_time = current_time
             elif (current_time - self.slouch_start_time) >= SLOUCH_CONFIRM_SECONDS:
-                # Sustained slouch confirmed
-                if (current_time - self.last_alert_time) > self.alert_cooldown:
-                    print(f"Shrimp posture detected! Score: {posture_ratio:.2f} (Threshold: {self.posture_threshold:.2f})")
-                    self._trigger_alert(frame)
+                if not self.is_slouching:
+                    # Brand new slouch event detected! Trigger immediately every time!
+                    self.is_slouching = True
                     self.last_alert_time = current_time
+                    print(f"🦐 Slouch detected! Score: {posture_ratio:.2f} (Threshold: {self.posture_threshold:.2f})")
+                    self._trigger_alert(frame)
+                else:
+                    # User is still slouched continuously; repeat alert periodically if uncorrected
+                    if (current_time - self.last_alert_time) >= CONTINUOUS_SLOUCH_REMINDER_COOLDOWN:
+                        self.last_alert_time = current_time
+                        print(f"🦐 Still slouching! Score: {posture_ratio:.2f}")
+                        self._trigger_alert(frame)
         else:
-            # Posture is good, reset slouch duration tracker
+            # Posture is good/upright! Instantly reset slouch state so the next slouch triggers immediately
+            if self.is_slouching:
+                print(f"✅ Good posture restored! (Score: {posture_ratio:.2f})")
+            self.is_slouching = False
             self.slouch_start_time = None
 
     def _trigger_alert(self, frame):
