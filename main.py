@@ -46,9 +46,9 @@ def get_resource_path(relative_path: str) -> str:
 
 # --- Posture & Alert Constants ---
 CALIBRATION_FRAMES_REQUIRED = 35   # ~1.2 seconds of camera frames to establish baseline
-POSTURE_TOLERANCE_RATIO = 0.90      # Posture below 90% of baseline counts as slouching
-SLOUCH_CONFIRM_SECONDS = 0.4       # Triggers fast (0.4s) every time user slouches
-CONTINUOUS_SLOUCH_REMINDER_COOLDOWN = 5   # While continuously slouching, spams more popups every 5s!
+POSTURE_TOLERANCE_RATIO = 0.96      # STRICT: Posture below 96% of baseline counts as slouching
+SLOUCH_CONFIRM_SECONDS = 0.2       # Ultra-fast reaction (0.2s) when slouching starts
+CONTINUOUS_SLOUCH_REMINDER_COOLDOWN = 3   # Relentless popup spam every 3s while remaining slouched!
 
 # MediaPipe Pose Landmark Indices
 LEFT_EAR = 7
